@@ -47,10 +47,9 @@ export class ApiCheckBuilder {
   private config: ApiCheckBuilderConfig;
   private store: ReturnType<typeof createTestStore>;
   private graph: ReturnType<typeof createStateGraph<TestState>>;
-  private nodeIds: string[] = [];
   private startNode: string | null = null;
   private endNode: string | null = null;
-  // Track nodes and edges for serialization
+  // Track nodes and edges for serialization to JSON
   private nodeData: Map<
     string,
     { type: string; data: Endpoint | WaitNode | AssertionNode }
@@ -73,8 +72,6 @@ export class ApiCheckBuilder {
       body?: any;
     }
   ): this {
-    this.nodeIds.push(id);
-
     // Track for serialization
     const endpoint: Endpoint = {
       id,
@@ -87,59 +84,16 @@ export class ApiCheckBuilder {
     };
     this.nodeData.set(id, { type: 'endpoint', data: endpoint });
 
+    // Add node to ts-edge graph (execution logic is in the executor, not here)
+    // We use ts-edge for graph structure and type safety, but serialize to JSON for execution
     this.graph.addNode(
       graphStateNode({
         name: id,
         execute: async (state: TestState) => {
-          const endpointHost = state.endpoint_host;
-          const url = `${endpointHost}${options.path}`;
-
-        // Import axios dynamically to avoid bundling issues
-        const axios = require('axios');
-
-        try {
-          const response = await axios({
-            method: options.method,
-            url,
-            headers: options.headers,
-            data: options.body,
-            timeout: 30000,
-          });
-
-          let parsedResponse = response.data;
-          if (options.response_format === 'JSON' && typeof response.data === 'string') {
-            parsedResponse = JSON.parse(response.data);
-          }
-
-          // Store response in state
-          state.setResponse(id, parsedResponse);
-
-          return {
-            nodeId: id,
-            type: 'endpoint',
-            success: true,
-            response: parsedResponse,
-          };
-        } catch (error: any) {
-          let errorMessage = 'Unknown error';
-          if (error.code === 'ECONNREFUSED') {
-            errorMessage = `Connection refused - is the server running on ${url}?`;
-          } else if (error.code === 'ETIMEDOUT') {
-            errorMessage = `Request timed out after 30000ms`;
-          } else if (error.response) {
-            errorMessage = `HTTP ${error.response.status}: ${error.response.statusText}`;
-          } else if (error.message) {
-            errorMessage = error.message;
-          }
-
-          return {
-            nodeId: id,
-            type: 'endpoint',
-            success: false,
-            error: errorMessage,
-          };
-        }
-      },
+          // This execute function is not used since we serialize to JSON
+          // It's kept for future use when we switch to ts-edge execution
+          return { nodeId: id, type: 'endpoint' };
+        },
       })
     );
 
@@ -147,7 +101,6 @@ export class ApiCheckBuilder {
   }
 
   addWait(id: string, duration: { minutes?: number; seconds?: number }): this {
-    this.nodeIds.push(id);
     const duration_ms =
       (duration.minutes || 0) * 60 * 1000 + (duration.seconds || 0) * 1000;
 
@@ -159,16 +112,14 @@ export class ApiCheckBuilder {
     };
     this.nodeData.set(id, { type: 'wait', data: waitNode });
 
+    // Add node to ts-edge graph (execution logic is in the executor, not here)
     this.graph.addNode(
       graphStateNode({
         name: id,
         execute: async (state: TestState) => {
-          await new Promise((resolve) => setTimeout(resolve, duration_ms));
-          return {
-            nodeId: id,
-            type: 'wait',
-            success: true,
-          };
+          // This execute function is not used since we serialize to JSON
+          // It's kept for future use when we switch to ts-edge execution
+          return { nodeId: id, type: 'wait' };
         },
       })
     );
@@ -183,8 +134,6 @@ export class ApiCheckBuilder {
       asserts: any
     ) => Array<{ type: string; expected?: any; actual?: any; message?: string }>
   ): this {
-    this.nodeIds.push(id);
-
     // Track for serialization
     const assertionNode: AssertionNode = {
       id,
@@ -193,57 +142,16 @@ export class ApiCheckBuilder {
     };
     this.nodeData.set(id, { type: 'assertion', data: assertionNode });
 
+    // Add node to ts-edge graph (execution logic is in the executor, not here)
+    // Store the assertion function for serialization/execution later
     this.graph.addNode(
       graphStateNode({
         name: id,
         execute: async (state: TestState) => {
-          const allResponses = state.getAllResponses();
-
-        // Import assertions helper
-        const { asserts } = require('./assertions');
-
-        // Evaluate assertion function with responses
-        const assertions = fn(allResponses, asserts);
-
-        const errors: string[] = [];
-
-        for (const assertion of assertions) {
-          switch (assertion.type) {
-            case 'isEqual':
-              if (assertion.expected !== assertion.actual) {
-                errors.push(
-                  assertion.message ||
-                    `Expected ${assertion.expected}, but got ${assertion.actual}`
-                );
-              }
-              break;
-            case 'notNull':
-              if (assertion.actual === null || assertion.actual === undefined) {
-                errors.push(assertion.message || 'Expected value to not be null');
-              }
-              break;
-            case 'isTrue':
-              if (assertion.actual !== true) {
-                errors.push(assertion.message || 'Expected value to be true');
-              }
-              break;
-            case 'isFalse':
-              if (assertion.actual !== false) {
-                errors.push(assertion.message || 'Expected value to be false');
-              }
-              break;
-            default:
-              errors.push(`Unknown assertion type: ${assertion.type}`);
-          }
-        }
-
-        return {
-          nodeId: id,
-          type: 'assertion',
-          success: errors.length === 0,
-          error: errors.length > 0 ? errors.join('; ') : undefined,
-        };
-      },
+          // This execute function is not used since we serialize to JSON
+          // Assertions are evaluated in the executor using the stored function
+          return { nodeId: id, type: 'assertion' };
+        },
       })
     );
 
