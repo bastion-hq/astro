@@ -42,6 +42,15 @@ The executor that takes JSON test plans (output from the test system DSL) and ex
 - Support for endpoints, waits, and assertions
 - Local and remote execution modes
 
+### 5. [sample-apis](./sample-apis/)
+A simple JSON API server for testing Astro functionality. Provides basic CRUD operations and can be extended for testing different scenarios.
+
+**Key Features:**
+- Health check endpoint
+- CRUD operations for items
+- JSON responses
+- Easy to extend for additional test scenarios
+
 ## Getting Started
 
 > 📖 **Detailed Setup Instructions**: See [SETUP.md](./SETUP.md) for step-by-step setup guide.
@@ -53,6 +62,11 @@ The executor that takes JSON test plans (output from the test system DSL) and ex
    cd astro-test-system && npm install && npm run build
    cd ../astro-plan-executor && npm install && npm run build
    cd ../astro-cli && npm install && npm run build
+   ```
+
+2. **Start the sample API server** (optional, for testing):
+   ```bash
+   cd ../sample-apis && npm install && npm run dev
    ```
 
 2. **Create a test file** in a `__astro__` directory:
